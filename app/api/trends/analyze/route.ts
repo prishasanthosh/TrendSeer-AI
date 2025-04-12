@@ -27,7 +27,7 @@ export async function POST(req: Request) {
     ])
 
     // Analyze the trend using Gemini
-    const model = genAI.getGenerativeModel({ model: "gemini-pro" })
+    const model = genAI.getGenerativeModel({ model: "gemini-1.5-pro" })
 
     const analysisPrompt = `
       Analyze this trend topic: "${topic}"

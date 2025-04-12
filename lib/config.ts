@@ -14,7 +14,7 @@ export const config = {
   maxMemoriesToRetrieve: 5, // Maximum number of memories to retrieve
 
   // Model Configuration
-  chatModel: "gemini-pro",
+  chatModel: "gemini-1.5-pro",
   embeddingModel: "embedding-001",
 
   // Feature Flags

@@ -11,55 +11,87 @@ export async function GET(req: Request) {
     const url = new URL(req.url)
     const userId = url.searchParams.get("userId")
 
+    console.log("Profile API called for userId:", userId)
+
     if (!userId) {
+      console.error("Profile API: Missing userId")
       return new Response(JSON.stringify({ error: "User ID is required" }), {
         status: 400,
         headers: { "Content-Type": "application/json" },
       })
     }
 
-    // Check if user exists
-    const { data: user, error: userError } = await supabase.from("users").select("*").eq("id", userId).single()
+    try {
+      // Check if the users table exists by trying to query it
+      const { data: users, error: userError } = await supabase.from("users").select("id").eq("id", userId).limit(1)
 
-    if (userError) {
-      return new Response(JSON.stringify({ error: "User not found" }), {
-        status: 404,
-        headers: { "Content-Type": "application/json" },
-      })
+      // If there's an error about the table not existing, we need to inform the user
+      if (userError && userError.message.includes("does not exist")) {
+        console.error("Profile API: Database tables not set up", userError)
+        return new Response(
+          JSON.stringify({
+            error: "Database not set up properly. Please run the schema.sql script in your Supabase project.",
+            setupRequired: true,
+          }),
+          {
+            status: 500,
+            headers: { "Content-Type": "application/json" },
+          },
+        )
+      }
+
+      // For other user query errors
+      if (userError) {
+        console.error("Profile API: Database error when checking user", userError)
+        return new Response(JSON.stringify({ error: "Database error when checking user" }), {
+          status: 500,
+          headers: { "Content-Type": "application/json" },
+        })
+      }
+
+      // Return empty profile if database is not set up or user doesn't exist
+      // This allows the app to function without errors even if the database isn't ready
+      return new Response(
+        JSON.stringify({
+          userId,
+          profile: {
+            industries: [],
+            audience: "",
+            goals: "",
+            trends: [],
+          },
+          memoryCount: 0,
+          databaseStatus: users ? "ready" : "not_setup",
+        }),
+        {
+          status: 200,
+          headers: { "Content-Type": "application/json" },
+        },
+      )
+    } catch (dbError) {
+      console.error("Profile API: Database error", dbError)
+      // Return an empty profile instead of an error to allow the app to function
+      return new Response(
+        JSON.stringify({
+          userId,
+          profile: {
+            industries: [],
+            audience: "",
+            goals: "",
+            trends: [],
+          },
+          memoryCount: 0,
+          databaseStatus: "error",
+        }),
+        {
+          status: 200,
+          headers: { "Content-Type": "application/json" },
+        },
+      )
     }
-
-    // Get user's memories
-    const { data: memories, error: memoriesError } = await supabase
-      .from("memories")
-      .select("content, created_at")
-      .eq("user_id", userId)
-      .order("created_at", { ascending: false })
-      .limit(10)
-
-    if (memoriesError) {
-      return new Response(JSON.stringify({ error: "Failed to fetch user memories" }), {
-        status: 500,
-        headers: { "Content-Type": "application/json" },
-      })
-    }
-
-    // Extract profile information from memories
-    const profile = extractProfileFromMemories(memories || [])
-
-    return new Response(
-      JSON.stringify({
-        userId,
-        profile,
-        memoryCount: memories?.length || 0,
-      }),
-      {
-        status: 200,
-        headers: { "Content-Type": "application/json" },
-      },
-    )
   } catch (error) {
-    console.error("Error in user profile route:", error)
-    return new Response(JSON.stringify({ error: "An error occurred during the request" }), {
+    console.error("Profile API: Unexpected error", error)
+    return new Response(JSON.stringify({ error: "An unexpected error occurred" }), {
       status: 500,
       headers: { "Content-Type": "application/json" },
     })

@@ -15,9 +15,13 @@ export function Sidebar({ className }: SidebarProps) {
 
   useEffect(() => {
     // Get user ID from localStorage
-    const storedUserId = localStorage.getItem("trendseer_user_id")
-    if (storedUserId) {
-      setUserId(storedUserId)
+    try {
+      const storedUserId = localStorage.getItem("trendseer_user_id")
+      if (storedUserId) {
+        setUserId(storedUserId)
+      }
+    } catch (error) {
+      console.error("Error accessing localStorage:", error)
     }
   }, [])
 
@@ -29,6 +33,11 @@ export function Sidebar({ className }: SidebarProps) {
             <TabsTrigger value="profile">Profile</TabsTrigger>
             <TabsTrigger value="trends">Trends</TabsTrigger>
           </TabsList>
+          {!userId && (
+            <div className="mt-4 rounded-md bg-muted p-4 text-center text-sm text-muted-foreground">
+              Loading user profile...
+            </div>
+          )}
           <TabsContent value="profile" className="mt-4">
             <UserProfile userId={userId} />
           </TabsContent>

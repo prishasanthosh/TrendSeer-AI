@@ -22,22 +22,46 @@ export function UserProfile({ userId }: UserProfileProps) {
   const [error, setError] = useState<string | null>(null)
 
   useEffect(() => {
+    if (!userId) {
+      setLoading(false)
+      return
+    }
+
     async function fetchProfile() {
-      if (!userId) return
+      if (!userId) {
+        setLoading(false)
+        return
+      }
 
       try {
         setLoading(true)
-        const response = await fetch(`/api/user/profile?userId=${userId}`)
+        console.log("Fetching profile for user:", userId)
+
+        const response = await fetch(`/api/user/profile?userId=${encodeURIComponent(userId)}`)
 
         if (!response.ok) {
-          throw new Error("Failed to fetch profile")
+          const errorData = await response.json().catch(() => ({}))
+          console.error("Profile API error:", response.status, errorData)
+          throw new Error(`Failed to fetch profile: ${response.status}`)
         }
 
         const data = await response.json()
-        setProfile(data.profile)
+        console.log("Profile data received:", data)
+
+        if (data && data.profile) {
+          setProfile(data.profile)
+        } else {
+          console.warn("No profile data in response")
+          setProfile({
+            industries: [],
+            audience: "",
+            goals: "",
+            trends: [],
+          })
+        }
       } catch (err) {
         console.error("Error fetching profile:", err)
-        setError("Failed to load profile data")
+        setError("Failed to load profile data. Please try refreshing.")
       } finally {
         setLoading(false)
       }
