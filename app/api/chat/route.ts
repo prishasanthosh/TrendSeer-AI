@@ -51,16 +51,26 @@ export async function POST(req: Request) {
     // Create system prompt
     const systemPrompt = createSystemPrompt(userContext, realTimeData)
 
-    const promptMessages = [
+    // Format messages for Gemini
+    const geminiMessages = [
       {
-        role: "system",
-        content: systemPrompt,
+        role: "user",
+        parts: [{ text: systemPrompt }],
       },
-      ...messages,
     ]
 
-    // Generate response using Gemini
+    // Add conversation history
+    for (let i = 0; i < messages.length; i++) {
+      const message = messages[i]
+      const role = message.role === "user" ? "user" : "model"
+      geminiMessages.push({
+        role,
+        parts: [{ text: message.content }],
+      })
+    }
+
     try {
+      // Use Gemini's chat interface instead of generateContentStream
       const model = genAI.getGenerativeModel({
         model: "gemini-1.5-pro",
         generationConfig: {
@@ -71,22 +81,33 @@ export async function POST(req: Request) {
         },
       })
 
-      // Create a text-only prompt
-      const prompt = promptMessages.map((m) => `${m.role}: ${m.content}`).join("\n\n")
-      console.log("Sending prompt to Gemini:", prompt.substring(0, 200) + "...")
+      console.log("Starting chat with Gemini...")
+      const chat = model.startChat({
+        history: geminiMessages.slice(0, -1), // All messages except the last one
+        generationConfig: {
+          temperature: 0.7,
+          topP: 0.8,
+          topK: 40,
+          maxOutputTokens: 2048,
+        },
+      })
 
-      // Create a TransformStream to convert the Gemini stream to the format expected by StreamingTextResponse
-      const stream = await model.generateContentStream(prompt)
+      // Get the last user message
+      const lastUserMessage = geminiMessages[geminiMessages.length - 1].parts[0].text
+
+      // Send the message and get a streaming response
+      const result = await chat.sendMessageStream(lastUserMessage)
 
       // Create a ReadableStream that the AI SDK can consume
-      const readableStream = new ReadableStream({
+      const stream = new ReadableStream({
         async start(controller) {
+          const encoder = new TextEncoder()
+
           try {
-            for await (const chunk of stream.stream) {
+            for await (const chunk of result.stream) {
               const text = chunk.text()
               if (text) {
-                // Encode the text as UTF-8
-                controller.enqueue(new TextEncoder().encode(text))
+                controller.enqueue(encoder.encode(text))
               }
             }
             controller.close()
@@ -102,13 +123,16 @@ export async function POST(req: Request) {
         try {
           const conversationSummary = await summarizeConversation(messages, lastMessage)
           await memoryManager.updateMemory(userId, conversationSummary)
+
+          // Store the chat message in history
+          await storeChatMessage(userId, messages[messages.length - 1], lastMessage)
         } catch (memoryError) {
           console.error("Chat API: Error updating memory:", memoryError)
         }
       }, 0)
 
       // Return the response using StreamingTextResponse
-      return new StreamingTextResponse(readableStream)
+      return new StreamingTextResponse(stream)
     } catch (modelError) {
       console.error("Error generating content with Gemini:", modelError)
       return new Response(
@@ -134,6 +158,31 @@ export async function POST(req: Request) {
         headers: { "Content-Type": "application/json" },
       },
     )
+  }
+}
+
+// Store chat message in history
+async function storeChatMessage(userId: string, userMessage: any, assistantMessage: string) {
+  try {
+    // Check if chat_history table exists
+    const { error: tableCheckError } = await supabase.from("chat_history").select("id").limit(1)
+
+    if (tableCheckError && tableCheckError.message.includes("does not exist")) {
+      // Create chat_history table if it doesn't exist
+      await supabase.rpc("create_chat_history_table")
+    }
+
+    // Insert the chat message
+    await supabase.from("chat_history").insert([
+      {
+        user_id: userId,
+        user_message: userMessage.content,
+        assistant_message: assistantMessage,
+        timestamp: new Date().toISOString(),
+      },
+    ])
+  } catch (error) {
+    console.error("Error storing chat message:", error)
   }
 }
 
@@ -236,16 +285,34 @@ function determineToolsToUse(message: string) {
 async function fetchRealTimeData(tools: string[], query: string, userContext: any) {
   const results: { [key: string]: any } = {}
 
-  for (const tool of tools) {
-    if (tool === "news-api") {
-      const newsData = await newsApiTool.fetchNews(query, userContext.industries)
-      results["news"] = newsData
-    }
+  try {
+    for (const tool of tools) {
+      if (tool === "news-api") {
+        try {
+          console.log("Fetching news data with API key:", process.env.NEWS_API_KEY?.substring(0, 5) + "...")
+          const newsData = await newsApiTool.fetchNews(query, userContext.industries)
+          results["news"] = newsData
+          console.log("News data fetched successfully:", newsData ? "yes" : "no")
+        } catch (error) {
+          console.error("Error fetching news data:", error)
+          results["news"] = { error: "Failed to fetch news data", articles: [] }
+        }
+      }
 
-    if (tool === "serper-api") {
-      const searchData = await serperApiTool.search(query, userContext.industries)
-      results["search"] = searchData
+      if (tool === "serper-api") {
+        try {
+          console.log("Fetching search data with API key:", process.env.SERPER_API_KEY?.substring(0, 5) + "...")
+          const searchData = await serperApiTool.search(query, userContext.industries)
+          results["search"] = searchData
+          console.log("Search data fetched successfully:", searchData ? "yes" : "no")
+        } catch (error) {
+          console.error("Error fetching search data:", error)
+          results["search"] = { error: "Failed to fetch search data", results: [] }
+        }
+      }
     }
+  } catch (error) {
+    console.error("Error in fetchRealTimeData:", error)
   }
 
   return results

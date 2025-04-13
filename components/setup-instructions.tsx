@@ -45,7 +45,7 @@ RETURNS TABLE (
   similarity FLOAT
 )
 LANGUAGE plpgsql
-AS $$
+AS $
 BEGIN
   RETURN QUERY
   SELECT
@@ -59,7 +59,128 @@ BEGIN
   ORDER BY similarity DESC
   LIMIT match_count;
 END;
-$$;`
+$;
+
+-- Create chat_history table
+CREATE TABLE IF NOT EXISTS chat_history (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  user_id TEXT REFERENCES users(id) ON DELETE CASCADE,
+  user_message TEXT NOT NULL,
+  assistant_message TEXT NOT NULL,
+  timestamp TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP
+);
+
+-- Create indexes for chat_history
+CREATE INDEX IF NOT EXISTS chat_history_user_id_idx ON chat_history(user_id);
+CREATE INDEX IF NOT EXISTS chat_history_timestamp_idx ON chat_history(timestamp);
+
+-- Create helper functions for table creation
+CREATE OR REPLACE FUNCTION create_users_table()
+RETURNS void
+LANGUAGE plpgsql
+AS $func$
+BEGIN
+  -- Check if the table already exists
+  IF NOT EXISTS (
+    SELECT FROM pg_tables
+    WHERE schemaname = 'public'
+    AND tablename = 'users'
+  ) THEN
+    -- Create the users table
+    CREATE TABLE public.users (
+      id TEXT PRIMARY KEY,
+      created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP
+    );
+  END IF;
+END;
+$func$;
+
+CREATE OR REPLACE FUNCTION create_memories_table()
+RETURNS void
+LANGUAGE plpgsql
+AS $func$
+BEGIN
+  -- Check if the pgvector extension is enabled
+  CREATE EXTENSION IF NOT EXISTS vector;
+
+  -- Check if the table already exists
+  IF NOT EXISTS (
+    SELECT FROM pg_tables
+    WHERE schemaname = 'public'
+    AND tablename = 'memories'
+  ) THEN
+    -- Create the memories table
+    CREATE TABLE public.memories (
+      id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+      user_id TEXT REFERENCES users(id) ON DELETE CASCADE,
+      content JSONB NOT NULL,
+      embedding VECTOR(768), -- Dimension size for Gemini embeddings
+      created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP
+    );
+
+    -- Create index for vector similarity search
+    CREATE INDEX IF NOT EXISTS memories_embedding_idx ON memories 
+    USING ivfflat (embedding vector_cosine_ops)
+    WITH (lists = 100);
+
+    -- Create function for similarity search
+    CREATE OR REPLACE FUNCTION match_memories(
+      query_embedding VECTOR(768),
+      match_threshold FLOAT,
+      match_count INT,
+      p_user_id TEXT
+    )
+    RETURNS TABLE (
+      id UUID,
+      content JSONB,
+      similarity FLOAT
+    )
+    LANGUAGE plpgsql
+    AS $f$
+    BEGIN
+      RETURN QUERY
+      SELECT
+        memories.id,
+        memories.content,
+        1 - (memories.embedding <=> query_embedding) AS similarity
+      FROM memories
+      WHERE 
+        memories.user_id = p_user_id AND
+        1 - (memories.embedding <=> query_embedding) > match_threshold
+      ORDER BY similarity DESC
+      LIMIT match_count;
+    END;
+    $f$;
+  END IF;
+END;
+$func$;
+
+CREATE OR REPLACE FUNCTION create_chat_history_table()
+RETURNS void
+LANGUAGE plpgsql
+AS $func$
+BEGIN
+  -- Check if the table already exists
+  IF NOT EXISTS (
+    SELECT FROM pg_tables
+    WHERE schemaname = 'public'
+    AND tablename = 'chat_history'
+  ) THEN
+    -- Create the chat_history table
+    CREATE TABLE public.chat_history (
+      id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+      user_id TEXT REFERENCES users(id) ON DELETE CASCADE,
+      user_message TEXT NOT NULL,
+      assistant_message TEXT NOT NULL,
+      timestamp TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP
+    );
+
+    -- Create index for faster queries
+    CREATE INDEX chat_history_user_id_idx ON public.chat_history(user_id);
+    CREATE INDEX chat_history_timestamp_idx ON public.chat_history(timestamp);
+  END IF;
+END;
+$func$;`
 
   const copyToClipboard = () => {
     navigator.clipboard.writeText(sqlScript)
@@ -78,7 +199,7 @@ $$;`
         </CardDescription>
       </CardHeader>
       <CardContent className="space-y-4">
-        <Alert variant="default">
+        <Alert variant="destructive">
           <AlertTriangle className="h-4 w-4" />
           <AlertTitle>Database tables not found</AlertTitle>
           <AlertDescription>

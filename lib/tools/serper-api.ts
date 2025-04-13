@@ -8,12 +8,22 @@ export class SerperApiTool {
 
   async search(query: string, industries: string[] = []) {
     try {
+      if (!this.apiKey) {
+        console.error("Serper API key is missing")
+        return {
+          error: "API key is missing",
+          results: [],
+        }
+      }
+
       // Enhance query with industry context if available
       let searchQuery = query
       if (industries && industries.length > 0) {
         // Add industry context to make search more relevant
         searchQuery = `${query} ${industries[0]}`
       }
+
+      console.log(`Searching with Serper for query: "${searchQuery}"`)
 
       const response = await fetch(this.baseUrl, {
         method: "POST",
@@ -27,10 +37,13 @@ export class SerperApiTool {
           hl: "en",
           num: 10,
         }),
+        cache: "no-store",
       })
 
       if (!response.ok) {
-        throw new Error(`Serper API error: ${response.status}`)
+        const errorText = await response.text()
+        console.error(`Serper API error: ${response.status}`, errorText)
+        throw new Error(`Serper API error: ${response.status} - ${errorText}`)
       }
 
       const data = await response.json()
@@ -38,7 +51,7 @@ export class SerperApiTool {
     } catch (error) {
       console.error("Error searching with Serper:", error)
       return {
-        error: "Failed to fetch search data",
+        error: `Failed to fetch search data: ${error instanceof Error ? error.message : String(error)}`,
         results: [],
       }
     }

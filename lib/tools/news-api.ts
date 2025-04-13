@@ -8,11 +8,21 @@ export class NewsApiTool {
 
   async fetchNews(query: string, industries: string[] = []) {
     try {
+      if (!this.apiKey) {
+        console.error("News API key is missing")
+        return {
+          error: "API key is missing",
+          articles: [],
+        }
+      }
+
       // Combine the user query with industry context
       let searchQuery = query
       if (industries && industries.length > 0) {
         searchQuery = `${query} ${industries.join(" OR ")}`
       }
+
+      console.log(`Fetching news for query: "${searchQuery}"`)
 
       // Fetch news articles
       const response = await fetch(
@@ -21,11 +31,14 @@ export class NewsApiTool {
           headers: {
             "X-Api-Key": this.apiKey,
           },
+          cache: "no-store",
         },
       )
 
       if (!response.ok) {
-        throw new Error(`News API error: ${response.status}`)
+        const errorText = await response.text()
+        console.error(`News API error: ${response.status}`, errorText)
+        throw new Error(`News API error: ${response.status} - ${errorText}`)
       }
 
       const data = await response.json()
@@ -35,7 +48,7 @@ export class NewsApiTool {
     } catch (error) {
       console.error("Error fetching news:", error)
       return {
-        error: "Failed to fetch news data",
+        error: `Failed to fetch news data: ${error instanceof Error ? error.message : String(error)}`,
         articles: [],
       }
     }
@@ -68,7 +81,7 @@ export class NewsApiTool {
     }
   }
 
-  private groupArticlesByTopic(articles: any[]) {
+  private groupArticlesByTopic(articles: { title: string }[]) {
     // This is a simplified implementation
     // In a real application, you might use NLP or clustering algorithms
     const topics: Record<string, any[]> = {}
@@ -77,7 +90,7 @@ export class NewsApiTool {
       // Extract potential topic from title
       const words = article.title.toLowerCase().split(" ")
       const potentialTopics = words.filter(
-        (word) => word.length > 5 && !["about", "these", "those", "their", "there"].includes(word),
+        (word: string) => word.length > 5 && !["about", "these", "those", "their", "there"].includes(word),
       )
 
       if (potentialTopics.length > 0) {

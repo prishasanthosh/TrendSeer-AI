@@ -10,12 +10,23 @@ import { Card } from "@/components/ui/card"
 import { SetupInstructions } from "@/components/setup-instructions"
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert"
 import { AlertCircle, Database } from "lucide-react"
+import { createClient } from "@supabase/supabase-js"
+import { MemoryManager } from "@/lib/memory-manager"
+
+// Initialize Supabase client
+const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL!
+const supabaseServiceKey = process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
+const supabase = createClient(supabaseUrl, supabaseServiceKey)
+
+// Initialize memory manager
+const memoryManager = new MemoryManager(supabase)
 
 export function ChatInterface() {
   const [setupRequired, setSetupRequired] = useState(false)
   const [useSimpleMode, setUseSimpleMode] = useState(false)
   const [chatError, setChatError] = useState<string | null>(null)
   const [checkingDatabase, setCheckingDatabase] = useState(true)
+  const [creatingTables, setCreatingTables] = useState(false)
 
   // Check URL for simple mode parameter
   useEffect(() => {
@@ -50,27 +61,33 @@ export function ChatInterface() {
     }
   }, [streamingChat.error, useSimpleMode])
 
-  // Check if database setup is required
+  // Check if database setup is required and try to create tables if needed
   useEffect(() => {
     if (!userId) return
 
-    async function checkDatabaseSetup() {
+    async function checkAndSetupDatabase() {
       try {
         setCheckingDatabase(true)
-        const response = await fetch(`/api/user/profile?userId=${encodeURIComponent(userId)}`)
-        const data = await response.json()
 
-        if (data.setupRequired || data.databaseStatus === "not_setup") {
+        // Try to create tables if they don't exist
+        setCreatingTables(true)
+        const tablesCreated = await memoryManager.createTablesIfNotExist()
+        setCreatingTables(false)
+
+        if (!tablesCreated) {
           setSetupRequired(true)
+        } else {
+          setSetupRequired(false)
         }
       } catch (error) {
-        console.error("Error checking database setup:", error)
+        console.error("Error checking/setting up database:", error)
+        setSetupRequired(true)
       } finally {
         setCheckingDatabase(false)
       }
     }
 
-    checkDatabaseSetup()
+    checkAndSetupDatabase()
   }, [userId])
 
   // Scroll to bottom when messages change
@@ -85,7 +102,9 @@ export function ChatInterface() {
         <div className="flex flex-1 items-center justify-center">
           <div className="text-center">
             <Database className="mx-auto h-12 w-12 animate-pulse text-primary" />
-            <h2 className="mt-4 text-xl font-semibold">Checking database setup...</h2>
+            <h2 className="mt-4 text-xl font-semibold">
+              {creatingTables ? "Setting up database..." : "Checking database setup..."}
+            </h2>
             <p className="mt-2 text-muted-foreground">This will only take a moment</p>
           </div>
         </div>

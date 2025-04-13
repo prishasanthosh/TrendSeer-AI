@@ -9,7 +9,6 @@ export function useTrendChat() {
   // Get or create a user ID
   const [userId, setUserId] = useState<string>("")
   const { toast } = useToast()
-  const [fallbackMode, setFallbackMode] = useState(false)
 
   useEffect(() => {
     // Try to get the user ID from localStorage
@@ -42,6 +41,7 @@ export function useTrendChat() {
       body: {
         userId,
       },
+      streamProtocol: "text", // Use text protocol to avoid parsing issues
       onResponse: (response) => {
         // Check if the response is ok
         if (!response.ok) {
@@ -70,22 +70,11 @@ export function useTrendChat() {
       },
       onError: (err) => {
         console.error("Chat error:", err)
-
-        // If we get a stream parsing error, switch to fallback mode
-        if (err.message && err.message.includes("Failed to parse stream")) {
-          setFallbackMode(true)
-          toast({
-            title: "Switching to Simple Mode",
-            description: "Encountered an issue with streaming. Switching to simple chat mode.",
-            variant: "default",
-          })
-        } else {
-          toast({
-            title: "Error",
-            description: "Failed to communicate with TrendSeer AI. Please try again.",
-            variant: "destructive",
-          })
-        }
+        toast({
+          title: "Error",
+          description: "Failed to communicate with TrendSeer AI. Please try again.",
+          variant: "destructive",
+        })
       },
     })
 
@@ -93,14 +82,6 @@ export function useTrendChat() {
   const clearChat = useCallback(() => {
     setMessages([])
   }, [setMessages])
-
-  // If we're in fallback mode, redirect to the simple chat implementation
-  useEffect(() => {
-    if (fallbackMode) {
-      // This will cause the component to re-render with the simple chat implementation
-      window.location.href = "/?simple=true"
-    }
-  }, [fallbackMode])
 
   return {
     messages,

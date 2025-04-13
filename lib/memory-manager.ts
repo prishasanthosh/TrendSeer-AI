@@ -33,19 +33,24 @@ export class MemoryManager {
         this.usersTableExists = true
       }
 
-      // Check if memories table exists
-      const { data: memoriesData, error: memoriesError } = await this.supabase.from("memories").select("id").limit(1)
+      // Check if memories table exists - use a try/catch to handle the case when it doesn't exist
+      try {
+        const { data: memoriesData, error: memoriesError } = await this.supabase.from("memories").select("id").limit(1)
 
-      if (memoriesError) {
-        if (this.errorMessageIncludes(memoriesError, "does not exist")) {
-          console.error("Memories table does not exist:", memoriesError)
-          this.memoriesTableExists = false
+        if (memoriesError) {
+          if (this.errorMessageIncludes(memoriesError, "does not exist")) {
+            console.error("Memories table does not exist:", memoriesError)
+            this.memoriesTableExists = false
+          } else {
+            console.error("Error checking memories table:", memoriesError)
+            this.memoriesTableExists = true // Assume it exists but there was another error
+          }
         } else {
-          console.error("Error checking memories table:", memoriesError)
-          this.memoriesTableExists = true // Assume it exists but there was another error
+          this.memoriesTableExists = true
         }
-      } else {
-        this.memoriesTableExists = true
+      } catch (error) {
+        console.error("Error checking memories table:", error)
+        this.memoriesTableExists = false
       }
 
       // Database is ready if both tables exist
@@ -330,6 +335,52 @@ export class MemoryManager {
     } catch (error) {
       console.error("Error in searchSimilarMemories:", error)
       return []
+    }
+  }
+
+  // Method to create required tables if they don't exist
+  async createTablesIfNotExist() {
+    try {
+      // Check if tables exist first
+      await this.checkDatabaseSetup()
+
+      // If tables already exist, no need to create them
+      if (this.databaseReady) {
+        console.log("Database tables already exist")
+        return true
+      }
+
+      console.log("Creating missing database tables...")
+
+      // Create users table if it doesn't exist
+      if (!this.usersTableExists) {
+        const { error: usersError } = await this.supabase.rpc("create_users_table")
+        if (usersError) {
+          console.error("Error creating users table:", usersError)
+          return false
+        }
+        console.log("Users table created successfully")
+      }
+
+      // Create memories table if it doesn't exist
+      if (!this.memoriesTableExists) {
+        const { error: memoriesError } = await this.supabase.rpc("create_memories_table")
+        if (memoriesError) {
+          console.error("Error creating memories table:", memoriesError)
+          return false
+        }
+        console.log("Memories table created successfully")
+      }
+
+      // Update our state
+      this.usersTableExists = true
+      this.memoriesTableExists = true
+      this.databaseReady = true
+
+      return true
+    } catch (error) {
+      console.error("Error creating database tables:", error)
+      return false
     }
   }
 }
