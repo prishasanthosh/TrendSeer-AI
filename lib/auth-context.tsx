@@ -84,8 +84,21 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
   const signUp = async (email: string, password: string) => {
     const { data, error } = await supabase.auth.signUp({ email, password })
+  
+    if (!error && data.user) {
+      const { error: insertError } = await supabase.from("users").insert({
+        id: data.user.id,
+        email: data.user.email,
+      })
+  
+      if (insertError) {
+        console.error("Error inserting into users table:", insertError)
+      }
+    }
+  
     return { data, error }
   }
+  
 
   const signOut = async () => {
     try {

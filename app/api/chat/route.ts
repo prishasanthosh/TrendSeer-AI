@@ -1,6 +1,7 @@
 import { GoogleGenerativeAI } from "@google/generative-ai"
 import { createClient } from "@supabase/supabase-js"
-import { StreamingTextResponse, type Message as VercelChatMessage } from "ai"
+import { NextResponse } from "next/server"
+import { type Message as VercelChatMessage } from "ai"
 import { NewsApiTool } from "@/lib/tools/news-api"
 import { SerperApiTool } from "@/lib/tools/serper-api"
 import { MemoryManager } from "@/lib/memory-manager"
@@ -43,7 +44,7 @@ export async function POST(req: Request) {
     const lastMessage = messages[messages.length - 1].content
 
     // Determine tools to use
-    const toolsToUse = determineToolsToUse(lastMessage)
+    const toolsToUse = determineToolsToUseLLM(lastMessage);
 
     // Fetch real-time data using the appropriate tools
     const realTimeData = await fetchRealTimeData(toolsToUse, lastMessage, userContext)
@@ -132,7 +133,7 @@ export async function POST(req: Request) {
       }, 0)
 
       // Return the response using StreamingTextResponse
-      return new StreamingTextResponse(stream)
+      return new NextResponse(stream)
     } catch (modelError) {
       console.error("Error generating content with Gemini:", modelError)
       return new Response(
@@ -173,14 +174,12 @@ async function storeChatMessage(userId: string, userMessage: any, assistantMessa
     }
 
     // Insert the chat message
-    await supabase.from("chat_history").insert([
-      {
-        user_id: userId,
-        user_message: userMessage.content,
-        assistant_message: assistantMessage,
-        timestamp: new Date().toISOString(),
-      },
-    ])
+    await supabase.from("chat_history").insert([{
+      user_id: userId,
+      user_message: userMessage.content,
+      assistant_message: assistantMessage,
+      timestamp: new Date().toISOString(),
+    }])
   } catch (error) {
     console.error("Error storing chat message:", error)
   }
@@ -260,26 +259,10 @@ async function summarizeConversation(messages: VercelChatMessage[], lastMessage:
 }
 
 // Helper functions
-function determineToolsToUse(message: string) {
-  const tools = []
-
-  if (
-    message.toLowerCase().includes("news") ||
-    message.toLowerCase().includes("articles") ||
-    message.toLowerCase().includes("publications")
-  ) {
-    tools.push("news-api")
-  }
-
-  if (
-    message.toLowerCase().includes("search") ||
-    message.toLowerCase().includes("trends") ||
-    message.toLowerCase().includes("online")
-  ) {
-    tools.push("serper-api")
-  }
-
-  return tools
+function determineToolsToUseLLM(message: string): string[] {
+  if (message.includes("breaking") || message.includes("what's happening now")) return ["news-api"];
+  if (message.includes("how to") || message.includes("find") || message.includes("where")) return ["serper-api"];
+  return [];
 }
 
 async function fetchRealTimeData(tools: string[], query: string, userContext: any) {
