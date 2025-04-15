@@ -10,6 +10,7 @@ import { MessageSquare, Clock } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { ScrollArea } from "@/components/ui/scroll-area"
 import { format } from "date-fns"
+
 interface SidebarProps {
   className?: string
 }
@@ -17,7 +18,9 @@ interface SidebarProps {
 interface ChatHistoryItem {
   id: string
   user_message: string
+  assistant_message: string
   timestamp: string
+  created_at?: string
 }
 
 export function Sidebar({ className }: SidebarProps) {
@@ -33,30 +36,47 @@ export function Sidebar({ className }: SidebarProps) {
 
   const fetchChatHistory = async () => {
     if (!user) return
-
+  
+    console.log("Fetching chat history for user:", user.id) // Debug log
+  
     try {
       setLoading(true)
-
-      // Check if chat_history table exists
+  
       const { error: tableCheckError } = await supabase.from("chat_history").select("id").limit(1)
-
+  
       if (tableCheckError && tableCheckError.message.includes("does not exist")) {
         console.log("Chat history table doesn't exist yet")
         setLoading(false)
         return
       }
-
-      const { data, error } = await supabase
+  
+      let { data, error } = await supabase
         .from("chat_history")
-        .select("*")
+        .select("id, user_message, assistant_message, created_at, user_id")
         .eq("user_id", user.id)
-        .order("timestamp", { ascending: false })
+        .order("created_at", { ascending: false })
         .limit(20)
-
+  
+      console.log("Initial chat history response:", data) // Debug log
+  
       if (error) {
         console.error("Error fetching chat history:", error)
+        setLoading(false)
+        return
+      }
+  
+      // Check if data is not null
+      if (data) {
+        // Map created_at to timestamp and set it
+        const mappedData = data.map((item) => ({
+          ...item,
+          timestamp: item.created_at,  // Use created_at as the timestamp
+        }))
+  
+        // Set chat history
+        setChatHistory(mappedData)
       } else {
-        setChatHistory(data || [])
+        setChatHistory([])  // If data is null, set an empty array
       }
     } catch (error) {
       console.error("Error in fetchChatHistory:", error)
@@ -64,6 +84,24 @@ export function Sidebar({ className }: SidebarProps) {
       setLoading(false)
     }
   }
+  
+  
+  
+  // Function to get the timestamp from either field
+  const getTimestamp = (item: ChatHistoryItem) => {
+    return item.timestamp || item.created_at || new Date().toISOString()
+  }
+
+  useEffect(() => {
+    // Set up an interval to refresh chat history periodically when the component is visible
+    const interval = setInterval(() => {
+      if (document.visibilityState === "visible") {
+        fetchChatHistory()
+      }
+    }, 30000) // Refresh every 30 seconds when visible
+
+    return () => clearInterval(interval)
+  }, [])
 
   return (
     <div className={cn("flex flex-col bg-muted/40", className)}>
@@ -97,10 +135,16 @@ export function Sidebar({ className }: SidebarProps) {
                 {chatHistory.length > 0 ? (
                   <div className="space-y-2">
                     {chatHistory.map((item) => (
-                      <div key={item.id} className="rounded-md border p-3">
-                        <p className="line-clamp-2 text-sm">{item.user_message}</p>
+                      <div
+                        key={item.id}
+                        className="rounded-md border p-3 hover:bg-muted/50 cursor-pointer transition-colors"
+                      >
+                        <p className="line-clamp-2 font-medium text-sm">{item.user_message}</p>
+                        <p className="line-clamp-1 text-xs text-muted-foreground mt-1">
+                          {item.assistant_message.substring(0, 60)}...
+                        </p>
                         <p className="mt-1 text-xs text-muted-foreground">
-                          {format(new Date(item.timestamp), "MMM d, yyyy h:mm a")}
+                          {format(new Date(getTimestamp(item)), "MMM d, yyyy h:mm a")}
                         </p>
                       </div>
                     ))}
@@ -123,4 +167,10 @@ export function Sidebar({ className }: SidebarProps) {
       </div>
     </div>
   )
+}
+
+export function refreshSidebarChatHistory() {
+  // This is a placeholder - we'll use the existing fetchChatHistory function
+  // which is already called when the component mounts
+  console.log("Refreshing sidebar chat history")
 }

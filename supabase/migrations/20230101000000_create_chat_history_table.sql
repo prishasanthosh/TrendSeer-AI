@@ -16,12 +16,12 @@ BEGIN
       user_id TEXT REFERENCES users(id) ON DELETE CASCADE,
       user_message TEXT NOT NULL,
       assistant_message TEXT NOT NULL,
-      timestamp TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP
+      created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP
     );
 
     -- Create index for faster queries
     CREATE INDEX chat_history_user_id_idx ON public.chat_history(user_id);
-    CREATE INDEX chat_history_timestamp_idx ON public.chat_history(timestamp);
+    CREATE INDEX chat_history_created_at_idx ON public.chat_history(created_at);
   END IF;
 END;
 $$;

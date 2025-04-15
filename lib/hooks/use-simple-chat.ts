@@ -108,9 +108,19 @@ export function useSimpleChat() {
     [input, messages, userId, toast],
   )
 
+  const saveCurrentChat = useCallback(async () => {
+    if (messages.length > 0 && userId) {
+      // The chat is already being saved through the API responses
+      console.log("Current chat is already being saved through API responses")
+    }
+  }, [messages, userId])
+
   const clearChat = useCallback(() => {
+    // Save current chat if needed
+    saveCurrentChat()
+    // Then clear messages
     setMessages([])
-  }, [])
+  }, [saveCurrentChat])
 
   const stop = useCallback(() => {
     // This is a no-op in the simple chat implementation

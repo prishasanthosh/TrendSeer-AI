@@ -4,6 +4,7 @@ import { useEffect, useState } from "react"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Badge } from "@/components/ui/badge"
 import { Skeleton } from "@/components/ui/skeleton"
+import { SetupInstructions } from "@/components/setup-instructions"
 
 interface UserProfileProps {
   userId: string
@@ -20,6 +21,7 @@ export function UserProfile({ userId }: UserProfileProps) {
   const [profile, setProfile] = useState<ProfileData | null>(null)
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
+  const [setupRequired, setSetupRequired] = useState(false)
 
   useEffect(() => {
     if (!userId) {
@@ -37,15 +39,39 @@ export function UserProfile({ userId }: UserProfileProps) {
         setLoading(true)
         console.log("Fetching profile for user:", userId)
 
-        const response = await fetch(`/api/user/profile?userId=${encodeURIComponent(userId)}`)
+        const token = localStorage.getItem("authToken")
 
-        if (!response.ok) {
-          const errorData = await response.json().catch(() => ({}))
-          console.error("Profile API error:", response.status, errorData)
-          throw new Error(`Failed to fetch profile: ${response.status}`)
+        const response = await fetch(`/api/user/profile?userId=${encodeURIComponent(userId)}`, {
+          headers: {
+            "Authorization": `Bearer ${token}`,
+            "Content-Type": "application/json",
+          },
+        })
+
+        let data
+        try {
+          data = await response.json()
+        } catch (jsonError) {
+          console.error("Failed to parse JSON from profile API response:", jsonError)
+          setError("Unexpected response format from server.")
+          return
         }
 
-        const data = await response.json()
+        if (!response.ok) {
+          console.error("Profile API error:", response.status, data)
+
+          if (data?.setupRequired) {
+            setSetupRequired(true)
+            setError("Database setup required")
+          } else if (response.status === 401) {
+            setError("Unauthorized: Please log in again.")
+          } else {
+            setError(`Failed to fetch profile: ${data?.error || response.status}`)
+          }
+
+          return
+        }
+
         console.log("Profile data received:", data)
 
         if (data && data.profile) {
@@ -58,6 +84,10 @@ export function UserProfile({ userId }: UserProfileProps) {
             goals: "",
             trends: [],
           })
+        }
+
+        if (data.databaseStatus === "not_setup" || data.setupRequired) {
+          setSetupRequired(true)
         }
       } catch (err) {
         console.error("Error fetching profile:", err)
@@ -80,7 +110,11 @@ export function UserProfile({ userId }: UserProfileProps) {
     )
   }
 
-  if (error) {
+  if (setupRequired) {
+    return <SetupInstructions />
+  }
+
+  if (error && !setupRequired) {
     return (
       <Card>
         <CardContent className="pt-6">

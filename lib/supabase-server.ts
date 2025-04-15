@@ -1,6 +1,16 @@
-// lib/supabase-server.ts
-import { cookies } from 'next/headers'
-import { createServerComponentClient } from '@supabase/auth-helpers-nextjs'
+import { createClient } from "@supabase/supabase-js"
 
-export const createServerSupabaseClient = () =>
-  createServerComponentClient({ cookies })
+// Create the Supabase client using the access token
+export const createSupabaseServerClient = (accessToken: string) => {
+  return createClient(
+    process.env.NEXT_PUBLIC_SUPABASE_URL!,
+    process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
+    {
+      global: {
+        headers: {
+          Authorization: `Bearer ${accessToken}`,
+        },
+      },
+    }
+  )
+}

@@ -4,84 +4,95 @@ import { useState, useEffect, useCallback } from "react"
 import { useChat } from "@ai-sdk/react"
 import { v4 as uuidv4 } from "uuid"
 import { useToast } from "@/components/ui/use-toast"
+import { supabase } from "@/lib/supabase-browser" // ✅ Using your browser client
 
 export function useTrendChat() {
-  // Get or create a user ID
   const [userId, setUserId] = useState<string>("")
+  const [accessToken, setAccessToken] = useState<string | null>(null)
   const { toast } = useToast()
 
   useEffect(() => {
-    // Try to get the user ID from localStorage
     try {
       const storedUserId = localStorage.getItem("trendseer_user_id")
-
       if (storedUserId) {
-        console.log("Using existing user ID:", storedUserId)
         setUserId(storedUserId)
       } else {
-        // Create a new user ID if none exists
         const newUserId = uuidv4()
-        console.log("Created new user ID:", newUserId)
         localStorage.setItem("trendseer_user_id", newUserId)
         setUserId(newUserId)
       }
     } catch (error) {
-      // Handle localStorage errors (e.g., in incognito mode)
-      console.error("Error accessing localStorage:", error)
       const fallbackUserId = uuidv4()
-      console.log("Using fallback user ID:", fallbackUserId)
       setUserId(fallbackUserId)
     }
   }, [])
 
-  // Use the AI SDK's useChat hook with our user ID
-  const { messages, input, handleInputChange, handleSubmit, isLoading, error, append, reload, stop, setMessages } =
-    useChat({
-      api: "/api/chat",
-      body: {
-        userId,
-      },
-      streamProtocol: "text", // Use text protocol to avoid parsing issues
-      onResponse: (response) => {
-        // Check if the response is ok
-        if (!response.ok) {
-          console.error("Error response from chat API:", response.status, response.statusText)
-          // Try to get more details from the response
-          response
-            .json()
-            .then((data) => {
-              console.error("Error details:", data)
-              toast({
-                title: "Error",
-                description: data.error || "Failed to get response from TrendSeer AI",
-                variant: "destructive",
-              })
-            })
-            .catch((err) => {
-              console.error("Failed to parse error response:", err)
-            })
-        } else {
-          console.log("Response received:", response.status)
-        }
-      },
-      onFinish: (message) => {
-        // You can add custom logic here when a message is finished
-        console.log("Message finished")
-      },
-      onError: (err) => {
-        console.error("Chat error:", err)
+  // ✅ Get Supabase session using auth-helpers
+  useEffect(() => {
+    const getSession = async () => {
+      const {
+        data: { session },
+        error,
+      } = await supabase.auth.getSession()
+
+      if (error) {
+        console.error("Supabase session error:", error.message)
+      } else if (session?.access_token) {
+        setAccessToken(session.access_token)
+        console.log("Access token set ✅")
+      }
+    }
+
+    getSession()
+  }, [])
+
+  const {
+    messages,
+    input,
+    handleInputChange,
+    handleSubmit,
+    isLoading,
+    error,
+    append,
+    reload,
+    stop,
+    setMessages,
+  } = useChat({
+    api: "/api/chat",
+    body: {
+      userId,
+      accessToken, // ✅ Passed to the backend
+    },
+    streamProtocol: "text",
+    onResponse: (res) => {
+      if (!res.ok) {
         toast({
-          title: "Error",
-          description: "Failed to communicate with TrendSeer AI. Please try again.",
+          title: "Chat Error",
+          description: `TrendSeer AI failed with status ${res.status}`,
           variant: "destructive",
         })
-      },
-    })
+      }
+    },
+    onError: (err) => {
+      console.error("Chat error:", err)
+      toast({
+        title: "Error",
+        description: "TrendSeer AI is not responding. Try again later.",
+        variant: "destructive",
+      })
+    },
+  })
 
-  // Function to clear chat but preserve memory
+  const saveCurrentChat = useCallback(async () => {
+    if (messages.length > 0 && userId) {
+      console.log("Chat save logic can go here.")
+    }
+  }, [messages, userId])
+
   const clearChat = useCallback(() => {
+    saveCurrentChat()
     setMessages([])
-  }, [setMessages])
+  }, [saveCurrentChat, setMessages])
 
   return {
     messages,

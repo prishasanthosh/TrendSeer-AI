@@ -238,7 +238,6 @@ async function summarizeConversation(messages: any[], lastMessage: string) {
       }
     }
 
-    // If no JSON format is found, try to parse the whole text
     try {
       return JSON.parse(text)
     } catch (parseError) {
