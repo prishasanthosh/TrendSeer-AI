@@ -178,7 +178,7 @@ async function storeChatMessage(userId: string, userMessage: any, assistantMessa
       user_id: userId,
       user_message: userMessage.content,
       assistant_message: assistantMessage,
-      timestamp: new Date().toISOString(),
+      created_at: new Date().toISOString(),
     }])
   } catch (error) {
     console.error("Error storing chat message:", error)
