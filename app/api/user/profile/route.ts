@@ -21,36 +21,12 @@ export async function GET(req: Request) {
       })
     }
 
-    try {
-      // Check if the users table exists by trying to query it
-      const { data: users, error: userError } = await supabase.from("users").select("id").eq("id", userId).limit(1)
-
-      // If there's an error about the table not existing, we need to inform the user
-      if (userError && userError.message.includes("does not exist")) {
-        console.error("Profile API: Database tables not set up", userError)
-        return new Response(
-          JSON.stringify({
-            error: "Database not set up properly. Please run the schema.sql script in your Supabase project.",
-            setupRequired: true,
-          }),
-          {
-            status: 500,
-            headers: { "Content-Type": "application/json" },
-          },
-        )
-      }
-
-      // For other user query errors
-      if (userError) {
-        console.error("Profile API: Database error when checking user", userError)
-        return new Response(JSON.stringify({ error: "Database error when checking user" }), {
-          status: 500,
-          headers: { "Content-Type": "application/json" },
-        })
-      }
-
-      // Return empty profile if database is not set up or user doesn't exist
-      // This allows the app to function without errors even if the database isn't ready
+    // ✅ Skip Supabase logic during preview builds to prevent deployment errors
+    if (
+      process.env.VERCEL_ENV === "preview" ||
+      process.env.NODE_ENV === "development"
+    ) {
+      console.warn("Skipping Supabase query during build/preview...")
       return new Response(
         JSON.stringify({
           userId,
@@ -61,45 +37,73 @@ export async function GET(req: Request) {
             trends: [],
           },
           memoryCount: 0,
-          databaseStatus: users ? "ready" : "not_setup",
+          databaseStatus: "skipped_build",
         }),
         {
           status: 200,
           headers: { "Content-Type": "application/json" },
-        },
-      )
-    } catch (dbError) {
-      console.error("Profile API: Database error", dbError)
-      // Return an empty profile instead of an error to allow the app to function
-      return new Response(
-        JSON.stringify({
-          userId,
-          profile: {
-            industries: [],
-            audience: "",
-            goals: "",
-            trends: [],
-          },
-          memoryCount: 0,
-          databaseStatus: "error",
-        }),
-        {
-          status: 200,
-          headers: { "Content-Type": "application/json" },
-        },
+        }
       )
     }
+
+    // Try fetching user from Supabase
+    const { data: users, error: userError } = await supabase
+      .from("users")
+      .select("id")
+      .eq("id", userId)
+      .limit(1)
+
+    if (userError?.message.includes("does not exist")) {
+      console.error("Profile API: Table missing - likely setup issue", userError)
+      return new Response(
+        JSON.stringify({
+          error:
+            "Database not set up properly. Please run the schema.sql script in your Supabase project.",
+          setupRequired: true,
+        }),
+        {
+          status: 500,
+          headers: { "Content-Type": "application/json" },
+        }
+      )
+    }
+
+    if (userError) {
+      console.error("Profile API: Query error", userError)
+      return new Response(JSON.stringify({ error: "Database error" }), {
+        status: 500,
+        headers: { "Content-Type": "application/json" },
+      })
+    }
+
+    return new Response(
+      JSON.stringify({
+        userId,
+        profile: {
+          industries: [],
+          audience: "",
+          goals: "",
+          trends: [],
+        },
+        memoryCount: 0,
+        databaseStatus: users ? "ready" : "not_setup",
+      }),
+      {
+        status: 200,
+        headers: { "Content-Type": "application/json" },
+      }
+    )
   } catch (error) {
     console.error("Profile API: Unexpected error", error)
-    return new Response(JSON.stringify({ error: "An unexpected error occurred" }), {
+    return new Response(JSON.stringify({ error: "Unexpected error occurred" }), {
       status: 500,
       headers: { "Content-Type": "application/json" },
     })
   }
 }
 
+// Optional helper (can be used when merging profile memory data)
 function extractProfileFromMemories(memories: any[]) {
-  // Initialize empty profile
   const profile = {
     industries: [] as string[],
     audience: "",
@@ -107,12 +111,10 @@ function extractProfileFromMemories(memories: any[]) {
     trends: [] as string[],
   }
 
-  // Combine all memories
   for (const memory of memories) {
     const content = memory.content
 
-    // Add industries
-    if (content.industries && Array.isArray(content.industries)) {
+    if (Array.isArray(content.industries)) {
       for (const industry of content.industries) {
         if (!profile.industries.includes(industry)) {
           profile.industries.push(industry)
@@ -120,18 +122,21 @@ function extractProfileFromMemories(memories: any[]) {
       }
     }
 
-    // Update audience
-    if (content.audience && (!profile.audience || content.audience.length > profile.audience.length)) {
+    if (
+      content.audience &&
+      (!profile.audience || content.audience.length > profile.audience.length)
+    ) {
       profile.audience = content.audience
     }
 
-    // Update goals
-    if (content.goals && (!profile.goals || content.goals.length > profile.goals.length)) {
+    if (
+      content.goals &&
+      (!profile.goals || content.goals.length > profile.goals.length)
+    ) {
       profile.goals = content.goals
     }
 
-    // Add trends
-    if (content.trends && Array.isArray(content.trends)) {
+    if (Array.isArray(content.trends)) {
       for (const trend of content.trends) {
         if (!profile.trends.includes(trend)) {
           profile.trends.push(trend)
