@@ -1,3 +1,4 @@
+//component: Sidebar
 "use client"
 
 import { useEffect, useState } from "react"
@@ -35,55 +36,42 @@ export function Sidebar({ className }: SidebarProps) {
   }, [user])
 
   const fetchChatHistory = async () => {
-    if (!user) return
+    if (!user) return;
   
-    console.log("Fetching chat history for user:", user.id) // Debug log
+    console.log("Fetching chat history for user:", user.id); // Debug log
   
     try {
-      setLoading(true)
+      setLoading(true);
   
-      const { error: tableCheckError } = await supabase.from("chat_history").select("id").limit(1)
+      const res = await fetch(`/api/chat/history?userId=${user.id}`, {
+        method: "GET",
+      });
   
-      if (tableCheckError && tableCheckError.message.includes("does not exist")) {
-        console.log("Chat history table doesn't exist yet")
-        setLoading(false)
-        return
+      if (!res.ok) {
+        console.error("Failed to fetch chat history");
+        setLoading(false);
+        return;
       }
   
-      let { data, error } = await supabase
-        .from("chat_history")
-        .select("id, user_message, assistant_message, created_at, user_id")
-        .eq("user_id", user.id)
-        .order("created_at", { ascending: false })
-        .limit(20)
+      const { chatHistory } = await res.json();
+      console.log("Fetched chat history:", chatHistory);
   
-      console.log("Initial chat history response:", data) // Debug log
-  
-      if (error) {
-        console.error("Error fetching chat history:", error)
-        setLoading(false)
-        return
-      }
-  
-      // Check if data is not null
-      if (data) {
-        // Map created_at to timestamp and set it
-        const mappedData = data.map((item) => ({
+      if (chatHistory) {
+        const mappedData = chatHistory.map((item: any) => ({
           ...item,
-          timestamp: item.created_at,  // Use created_at as the timestamp
-        }))
+          timestamp: item.created_at, // Use created_at as timestamp
+        }));
   
-        // Set chat history
-        setChatHistory(mappedData)
+        setChatHistory(mappedData);
       } else {
-        setChatHistory([])  // If data is null, set an empty array
+        setChatHistory([]);
       }
     } catch (error) {
-      console.error("Error in fetchChatHistory:", error)
+      console.error("Error in fetchChatHistory:", error);
     } finally {
-      setLoading(false)
+      setLoading(false);
     }
-  }
+  };  
   
   
   
