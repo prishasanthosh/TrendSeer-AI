@@ -12,13 +12,11 @@ export class MemoryManager {
     this.supabase = supabase
     this.genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY!)
 
-    // Check if database is set up
     this.checkDatabaseSetup()
   }
 
   private async checkDatabaseSetup() {
     try {
-      // Check if users table exists
       const { data: usersData, error: usersError } = await this.supabase.from("users").select("id").limit(1)
 
       if (usersError) {
@@ -27,13 +25,12 @@ export class MemoryManager {
           this.usersTableExists = false
         } else {
           console.error("Error checking users table:", usersError)
-          this.usersTableExists = true // Assume it exists but there was another error
+          this.usersTableExists = true 
         }
       } else {
         this.usersTableExists = true
       }
 
-      // Check if memories table exists - use a try/catch to handle the case when it doesn't exist
       try {
         const { data: memoriesData, error: memoriesError } = await this.supabase.from("memories").select("id").limit(1)
 
@@ -43,7 +40,7 @@ export class MemoryManager {
             this.memoriesTableExists = false
           } else {
             console.error("Error checking memories table:", memoriesError)
-            this.memoriesTableExists = true // Assume it exists but there was another error
+            this.memoriesTableExists = true 
           }
         } else {
           this.memoriesTableExists = true
@@ -53,7 +50,6 @@ export class MemoryManager {
         this.memoriesTableExists = false
       }
 
-      // Database is ready if both tables exist
       this.databaseReady = this.usersTableExists && this.memoriesTableExists
       console.log(
         `Database status: ${this.databaseReady ? "Ready" : "Not ready"} (Users: ${this.usersTableExists}, Memories: ${this.memoriesTableExists})`,
@@ -66,7 +62,6 @@ export class MemoryManager {
     }
   }
 
-  // Helper method to safely check if an error message includes a string
   private errorMessageIncludes(error: any, text: string): boolean {
     return (
       error &&
@@ -86,19 +81,16 @@ export class MemoryManager {
 
       console.log("Getting user context for:", userId)
 
-      // If database is not ready, return empty context
       if (!this.databaseReady) {
         console.log("Database not ready, returning empty context")
         return this.getEmptyContext()
       }
 
-      // If memories table doesn't exist, return empty context
       if (!this.memoriesTableExists) {
         console.log("Memories table doesn't exist, returning empty context")
         return this.getEmptyContext()
       }
 
-      // Try to query the memories table
       try {
         const { data: memories, error: memoriesError } = await this.supabase
           .from("memories")
@@ -109,7 +101,6 @@ export class MemoryManager {
         if (memoriesError) {
           if (this.errorMessageIncludes(memoriesError, "does not exist")) {
             console.error("Memories table does not exist:", memoriesError)
-            // Update our state to reflect that the memories table doesn't exist
             this.memoriesTableExists = false
             this.databaseReady = false
             return this.getEmptyContext()
@@ -119,12 +110,10 @@ export class MemoryManager {
           return this.getEmptyContext()
         }
 
-        // If no memories exist yet, return empty context
         if (!memories || memories.length === 0) {
           return this.getEmptyContext()
         }
 
-        // Consolidate memories into a user context
         return this.consolidateMemories(memories)
       } catch (error) {
         console.error("Error querying memories table:", error)
@@ -136,7 +125,6 @@ export class MemoryManager {
     }
   }
 
-  // Helper method to return a consistent empty context
   private getEmptyContext() {
     return {
       industries: [],
@@ -153,19 +141,16 @@ export class MemoryManager {
         return false
       }
 
-      // If database is not ready, don't try to update memory
       if (!this.databaseReady) {
         console.log("Database not ready, skipping memory update")
         return false
       }
 
-      // If either table doesn't exist, don't try to update memory
       if (!this.usersTableExists || !this.memoriesTableExists) {
         console.log("Required tables don't exist, skipping memory update")
         return false
       }
 
-      // Try to check if user exists and create if needed
       try {
         const { data: users, error: userCheckError } = await this.supabase.from("users").select("id").eq("id", userId)
 
@@ -202,7 +187,7 @@ export class MemoryManager {
         return false
       }
 
-      // Try to generate embeddings and store memory
+      // generate embeddings and store memory
       try {
         // Generate embeddings for the memory
         const embeddingModel = this.genAI.getGenerativeModel({ model: "embedding-001" })
@@ -257,8 +242,6 @@ export class MemoryManager {
     // Combine all memories
     for (const memory of memories) {
       const content = memory.content
-
-      // Add industries if they don't already exist in the context
       if (content.industries && Array.isArray(content.industries)) {
         for (const industry of content.industries) {
           if (!context.industries.includes(industry)) {
@@ -266,18 +249,16 @@ export class MemoryManager {
           }
         }
       }
-
-      // Update audience if it exists and is more detailed
       if (content.audience && (!context.audience || content.audience.length > context.audience.length)) {
         context.audience = content.audience
       }
 
-      // Update goals if they exist and are more detailed
+      // Update goals if exist
       if (content.goals && (!context.goals || content.goals.length > context.goals.length)) {
         context.goals = content.goals
       }
 
-      // Add trends if they don't already exist in the context
+      // Add trends if don't exist in the context
       if (content.trends && Array.isArray(content.trends)) {
         for (const trend of content.trends) {
           if (!context.previousTrends.includes(trend)) {
@@ -297,7 +278,7 @@ export class MemoryManager {
         return []
       }
 
-      // If database is not ready or memories table doesn't exist, return empty array
+      // If database is not ready 
       if (!this.databaseReady || !this.memoriesTableExists) {
         console.log("Database not ready or memories table doesn't exist, skipping memory search")
         return []
@@ -308,7 +289,7 @@ export class MemoryManager {
       const embeddingResult = await embeddingModel.embedContent(query)
       const queryEmbedding = embeddingResult.embedding.values
 
-      // Try to search for similar memories
+      // search for similar memos
       try {
         const { data: similarMemories, error } = await this.supabase.rpc("match_memories", {
           query_embedding: queryEmbedding,
@@ -338,13 +319,10 @@ export class MemoryManager {
     }
   }
 
-  // Method to create required tables if they don't exist
   async createTablesIfNotExist() {
     try {
-      // Check if tables exist first
       await this.checkDatabaseSetup()
 
-      // If tables already exist, no need to create them
       if (this.databaseReady) {
         console.log("Database tables already exist")
         return true
@@ -352,7 +330,6 @@ export class MemoryManager {
 
       console.log("Creating missing database tables...")
 
-      // Create users table if it doesn't exist
       if (!this.usersTableExists) {
         const { error: usersError } = await this.supabase.rpc("create_users_table")
         if (usersError) {
@@ -362,7 +339,6 @@ export class MemoryManager {
         console.log("Users table created successfully")
       }
 
-      // Create memories table if it doesn't exist
       if (!this.memoriesTableExists) {
         const { error: memoriesError } = await this.supabase.rpc("create_memories_table")
         if (memoriesError) {
@@ -372,7 +348,6 @@ export class MemoryManager {
         console.log("Memories table created successfully")
       }
 
-      // Update our state
       this.usersTableExists = true
       this.memoriesTableExists = true
       this.databaseReady = true

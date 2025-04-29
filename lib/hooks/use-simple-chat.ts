@@ -22,7 +22,6 @@ export function useSimpleChat() {
   const { toast } = useToast()
 
   useEffect(() => {
-    // Try to get the user ID from localStorage
     try {
       const storedUserId = localStorage.getItem("trendseer_user_id")
 
@@ -30,14 +29,12 @@ export function useSimpleChat() {
         console.log("Using existing user ID:", storedUserId)
         setUserId(storedUserId)
       } else {
-        // Create a new user ID if none exists
         const newUserId = uuidv4()
         console.log("Created new user ID:", newUserId)
         localStorage.setItem("trendseer_user_id", newUserId)
         setUserId(newUserId)
       }
     } catch (error) {
-      // Handle localStorage errors (e.g., in incognito mode)
       console.error("Error accessing localStorage:", error)
       const fallbackUserId = uuidv4()
       console.log("Using fallback user ID:", fallbackUserId)
@@ -53,8 +50,6 @@ export function useSimpleChat() {
     async (e: React.FormEvent<HTMLFormElement>) => {
       e.preventDefault()
       if (!input.trim() || !userId) return
-
-      // Add user message to the chat
       const userMessage: Message = {
         id: uuidv4(),
         role: "user",
@@ -110,21 +105,16 @@ export function useSimpleChat() {
 
   const saveCurrentChat = useCallback(async () => {
     if (messages.length > 0 && userId) {
-      // The chat is already being saved through the API responses
       console.log("Current chat is already being saved through API responses")
     }
   }, [messages, userId])
 
   const clearChat = useCallback(() => {
-    // Save current chat if needed
     saveCurrentChat()
-    // Then clear messages
     setMessages([])
   }, [saveCurrentChat])
 
   const stop = useCallback(() => {
-    // This is a no-op in the simple chat implementation
-    // as we don't have streaming to stop
     console.log("Stop requested, but not applicable in simple chat")
   }, [])
 

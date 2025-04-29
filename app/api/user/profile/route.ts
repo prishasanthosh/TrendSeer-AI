@@ -21,7 +21,7 @@ export async function GET(req: Request) {
       })
     }
 
-    // ✅ Skip Supabase logic during preview builds to prevent deployment errors
+    
     if (
       process.env.VERCEL_ENV === "preview" ||
       process.env.NODE_ENV === "development"

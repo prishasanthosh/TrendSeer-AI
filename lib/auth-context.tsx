@@ -47,7 +47,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
     getInitialSession()
 
-    // Listen for auth changes
+    // listen for auth state  changes
     const {
       data: { subscription },
     } = supabase.auth.onAuthStateChange((_event, session) => {

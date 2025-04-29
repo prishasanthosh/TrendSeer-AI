@@ -17,6 +17,15 @@ interface ProfileData {
   trends: string[]
 }
 
+const ProfileCard = ({ title, children }: { title: string, children: React.ReactNode }) => (
+  <Card>
+    <CardHeader className="pb-2">
+      <CardTitle className="text-sm font-medium">{title}</CardTitle>
+    </CardHeader>
+    <CardContent>{children}</CardContent>
+  </Card>
+)
+
 export function UserProfile({ userId }: UserProfileProps) {
   const [profile, setProfile] = useState<ProfileData | null>(null)
   const [loading, setLoading] = useState(true)
@@ -48,14 +57,7 @@ export function UserProfile({ userId }: UserProfileProps) {
           },
         })
 
-        let data
-        try {
-          data = await response.json()
-        } catch (jsonError) {
-          console.error("Failed to parse JSON from profile API response:", jsonError)
-          setError("Unexpected response format from server.")
-          return
-        }
+        const data = await response.json()
 
         if (!response.ok) {
           console.error("Profile API error:", response.status, data)
@@ -68,13 +70,10 @@ export function UserProfile({ userId }: UserProfileProps) {
           } else {
             setError(`Failed to fetch profile: ${data?.error || response.status}`)
           }
-
           return
         }
 
-        console.log("Profile data received:", data)
-
-        if (data && data.profile) {
+        if (data?.profile) {
           setProfile(data.profile)
         } else {
           console.warn("No profile data in response")
@@ -138,62 +137,42 @@ export function UserProfile({ userId }: UserProfileProps) {
 
   return (
     <div className="space-y-4">
-      <Card>
-        <CardHeader className="pb-2">
-          <CardTitle className="text-sm font-medium">Industries</CardTitle>
-        </CardHeader>
-        <CardContent>
-          {profile.industries.length > 0 ? (
-            <div className="flex flex-wrap gap-2">
-              {profile.industries.map((industry) => (
-                <Badge key={industry} variant="secondary">
-                  {industry}
-                </Badge>
-              ))}
-            </div>
-          ) : (
-            <p className="text-sm text-muted-foreground">No industries identified yet</p>
-          )}
-        </CardContent>
-      </Card>
+      <ProfileCard title="Industries">
+        {profile.industries.length > 0 ? (
+          <div className="flex flex-wrap gap-2">
+            {profile.industries.map((industry) => (
+              <Badge key={industry} variant="secondary">
+                {industry}
+              </Badge>
+            ))}
+          </div>
+        ) : (
+          <p className="text-sm text-muted-foreground">No industries identified yet</p>
+        )}
+      </ProfileCard>
 
       {profile.audience && (
-        <Card>
-          <CardHeader className="pb-2">
-            <CardTitle className="text-sm font-medium">Target Audience</CardTitle>
-          </CardHeader>
-          <CardContent>
-            <p className="text-sm">{profile.audience}</p>
-          </CardContent>
-        </Card>
+        <ProfileCard title="Target Audience">
+          <p className="text-sm">{profile.audience}</p>
+        </ProfileCard>
       )}
 
       {profile.goals && (
-        <Card>
-          <CardHeader className="pb-2">
-            <CardTitle className="text-sm font-medium">Content Goals</CardTitle>
-          </CardHeader>
-          <CardContent>
-            <p className="text-sm">{profile.goals}</p>
-          </CardContent>
-        </Card>
+        <ProfileCard title="Content Goals">
+          <p className="text-sm">{profile.goals}</p>
+        </ProfileCard>
       )}
 
       {profile.trends && profile.trends.length > 0 && (
-        <Card>
-          <CardHeader className="pb-2">
-            <CardTitle className="text-sm font-medium">Previously Discussed Trends</CardTitle>
-          </CardHeader>
-          <CardContent>
-            <div className="flex flex-wrap gap-2">
-              {profile.trends.map((trend) => (
-                <Badge key={trend} variant="outline">
-                  {trend}
-                </Badge>
-              ))}
-            </div>
-          </CardContent>
-        </Card>
+        <ProfileCard title="Previously Discussed Trends">
+          <div className="flex flex-wrap gap-2">
+            {profile.trends.map((trend) => (
+              <Badge key={trend} variant="outline">
+                {trend}
+              </Badge>
+            ))}
+          </div>
+        </ProfileCard>
       )}
     </div>
   )

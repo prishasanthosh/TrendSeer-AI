@@ -4,7 +4,7 @@ import { useState, useEffect, useCallback } from "react"
 import { useChat } from "@ai-sdk/react"
 import { v4 as uuidv4 } from "uuid"
 import { useToast } from "@/components/ui/use-toast"
-import { supabase } from "@/lib/supabase-browser" // ✅ Using your browser client
+import { supabase } from "@/lib/supabase-browser" 
 
 export function useTrendChat() {
   const [userId, setUserId] = useState<string>("")
@@ -27,7 +27,7 @@ export function useTrendChat() {
     }
   }, [])
 
-  // ✅ Get Supabase session using auth-helpers
+  //  Supabase session using auth-helpers
   useEffect(() => {
     const getSession = async () => {
       const {
@@ -61,7 +61,7 @@ export function useTrendChat() {
     api: "/api/chat",
     body: {
       userId,
-      accessToken, // ✅ Passed to the backend
+      accessToken, //Passed to the backend
     },
     streamProtocol: "text",
     onResponse: (res) => {
